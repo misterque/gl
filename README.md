@@ -6,4 +6,6 @@ Some examples require [Go-SDL](github.com/banthar/Go-SDL) and some require [GLFW
 
 You can install this package with go get.
 
-    sudo -E  go get github.com/banthar/gl
+Fork from banthar with some added functionallity (opengl 3.2 core stuff)
+
+    sudo -E  go get github.com/dane-unltd/gl
