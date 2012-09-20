@@ -13,6 +13,7 @@ package gl
 import "C"
 import "unsafe"
 import "reflect"
+import "fmt"
 
 type GLenum C.GLenum
 type GLbitfield C.GLbitfield
@@ -125,7 +126,7 @@ func (shader Shader) GetInfoLog() string {
 	var length C.GLint
 	C.glGetShaderiv(C.GLuint(shader), C.GLenum(INFO_LOG_LENGTH), &length)
 	// length is buffer size including null character
-	
+
 	if length > 1 {
 		log := C.malloc(C.size_t(length))
 		defer C.free(log)
@@ -157,7 +158,6 @@ func (shader Shader) Source(source string) {
 	C.glShaderSource(C.GLuint(shader), 1, &csource, &one)
 }
 
-
 func (shader Shader) Compile() { C.glCompileShader(C.GLuint(shader)) }
 
 func (shader Shader) Get(param GLenum) int {
@@ -179,7 +179,6 @@ func (program Program) AttachShader(shader Shader) {
 	C.glAttachShader(C.GLuint(program), C.GLuint(shader))
 }
 
-
 func (program Program) GetAttachedShaders() []Object {
 	var len C.GLint
 	C.glGetProgramiv(C.GLuint(program), C.GLenum(ACTIVE_UNIFORM_MAX_LENGTH), &len)
@@ -193,19 +192,19 @@ func (program Program) DetachShader(shader Shader) {
 	C.glDetachShader(C.GLuint(program), C.GLuint(shader))
 }
 
-func (program Program) TransformFeedbackVaryings (names []string, buffer_mode GLenum) {
+func (program Program) TransformFeedbackVaryings(names []string, buffer_mode GLenum) {
 	if len(names) == 0 {
 		C.glTransformFeedbackVaryings(C.GLuint(program), 0, (**C.GLchar)(nil), C.GLenum(buffer_mode))
 	} else {
 		gl_names := make([]*C.GLchar, len(names))
 
-		for i := range(names) {
+		for i := range names {
 			gl_names[i] = glString(names[i])
 		}
 
 		C.glTransformFeedbackVaryings(C.GLuint(program), C.GLsizei(len(gl_names)), &gl_names[0], C.GLenum(buffer_mode))
 
-		for _, s := range(gl_names) {
+		for _, s := range gl_names {
 			freeString(s)
 		}
 	}
@@ -223,13 +222,13 @@ func (program Program) GetInfoLog() string {
 	var length C.GLint
 	C.glGetProgramiv(C.GLuint(program), C.GLenum(INFO_LOG_LENGTH), &length)
 	// length is buffer size including null character
-	
+
 	if length > 1 {
 		log := C.malloc(C.size_t(length))
 		defer C.free(log)
 		C.glGetProgramInfoLog(C.GLuint(program), C.GLsizei(length), nil, (*C.GLchar)(log))
 		return C.GoString((*C.char)(log))
-	} 
+	}
 	return ""
 
 }
@@ -240,7 +239,6 @@ func (program Program) Get(param GLenum) int {
 	C.glGetProgramiv(C.GLuint(program), C.GLenum(param), &rv)
 	return int(rv)
 }
-
 
 func (program Program) GetUniformiv(location UniformLocation, values []int) {
 	// no range check
@@ -268,13 +266,21 @@ func (program Program) GetAttribLocation(name string) AttribLocation {
 	return AttribLocation(C.glGetAttribLocation(C.GLuint(program), cname))
 }
 
-
 func (program Program) BindAttribLocation(index AttribLocation, name string) {
 
 	cname := glString(name)
 	defer freeString(cname)
 
 	C.glBindAttribLocation(C.GLuint(program), C.GLuint(index), cname)
+
+}
+
+func (program Program) BindFragDataLocation(colorNr uint, name string) {
+
+	cname := glString(name)
+	defer freeString(cname)
+
+	C.glBindFragDataLocation(C.GLuint(program), C.GLuint(colorNr), cname)
 
 }
 
@@ -685,9 +691,8 @@ func (indx AttribLocation) Attrib4fv(values []float32) {
 	C.glVertexAttrib4fv(C.GLuint(indx), (*C.GLfloat)(unsafe.Pointer(&values[0])))
 }
 
-func (indx AttribLocation) AttribPointer(size uint, normalized bool, stride int, pointer interface{}) {
-	t, p := GetGLenumType(pointer)
-	C.glVertexAttribPointer(C.GLuint(indx), C.GLint(size), C.GLenum(t), glBool(normalized), C.GLsizei(stride), p)
+func (indx AttribLocation) AttribPointer(size uint, t GLenum, normalized bool, stride int, offset uint) {
+	C.glVertexAttribPointer(C.GLuint(indx), C.GLint(size), C.GLenum(t), glBool(normalized), C.GLsizei(stride), unsafe.Pointer(uintptr(offset)))
 }
 
 func (indx AttribLocation) EnableArray() {
@@ -698,35 +703,33 @@ func (indx AttribLocation) DisableArray() {
 	C.glDisableVertexAttribArray(C.GLuint(indx))
 }
 
-
 // Vertex Arrays
 type VertexArray Object
 
-func GenVertexArray () VertexArray {
+func GenVertexArray() VertexArray {
 	var a C.GLuint
 	C.glGenVertexArrays(1, &a)
 	return VertexArray(a)
 }
 
-func GenVertexArrays (arrays []VertexArray) {
+func GenVertexArrays(arrays []VertexArray) {
 	C.glGenVertexArrays(C.GLsizei(len(arrays)), (*C.GLuint)(&arrays[0]))
 }
 
-func (array VertexArray) Delete () {
+func (array VertexArray) Delete() {
 	C.glDeleteVertexArrays(1, (*C.GLuint)(&array))
 }
 
-func DeleteVertexArrays (arrays []VertexArray) {
+func DeleteVertexArrays(arrays []VertexArray) {
 	C.glDeleteVertexArrays(C.GLsizei(len(arrays)), (*C.GLuint)(&arrays[0]))
 }
 
-func (array VertexArray) Bind () {
+func (array VertexArray) Bind() {
 	C.glBindVertexArray(C.GLuint(array))
 }
 
 // UniformLocation
 //TODO
-
 
 type UniformLocation int
 
@@ -744,7 +747,7 @@ func (location UniformLocation) Uniform3f(x float32, y float32, z float32) {
 
 func (location UniformLocation) Uniform1fv(v []float32) {
 	_, p := GetGLenumType(v)
-	C.glUniform1fv(C.GLint(location), C.GLsizei(len(v)), (*C.GLfloat)(p));
+	C.glUniform1fv(C.GLint(location), C.GLsizei(len(v)), (*C.GLfloat)(p))
 }
 
 func (location UniformLocation) Uniform1i(x int) {
@@ -770,7 +773,6 @@ func (location UniformLocation) Uniform2iv(v []int32) {
 	//	C.glUniform2iv(C.GLint(location), (*C.int)(&v[0]));
 }
 
-
 func (location UniformLocation) Uniform3fv(v []float32) {
 	panic("unimplemented")
 	//	C.glUniform3fv(C.GLint(location), (*C.float)(&v[0]));
@@ -789,18 +791,26 @@ func (location UniformLocation) Uniform4f(x float32, y float32, z float32, w flo
 	C.glUniform4f(C.GLint(location), C.GLfloat(x), C.GLfloat(y), C.GLfloat(z), C.GLfloat(w))
 }
 
-func (location UniformLocation) Uniform4fv(v []float32) {
-	panic("unimplemented")
-	//	C.glUniform4fv(C.GLint(location), (*C.float)(&v[0]));
+func (location UniformLocation) Uniform4fv(c uint, v []float32) {
+	C.glUniform4fv(C.GLint(location), C.GLsizei(c), (*C.GLfloat)(&v[0]))
 }
 
 func (location UniformLocation) Uniform4i(x int, y int, z int, w int) {
 	C.glUniform4i(C.GLint(location), C.GLint(x), C.GLint(y), C.GLint(z), C.GLint(w))
 }
 
-func (location UniformLocation) Uniform4iv(v []int32) {
-	panic("unimplemented")
-	//	C.glUniform4iv(C.GLint(location), (*C.int)(&v[0]));
+func (location UniformLocation) Uniform4iv(c uint, v []int32) {
+	C.glUniform4iv(C.GLint(location), C.GLsizei(c), (*C.GLint)(&v[0]))
+}
+
+func (location UniformLocation) UniformMatrix2fv(c uint, tr int, v []float32) {
+	C.glUniformMatrix2fv(C.GLint(location), C.GLsizei(c), C.GLboolean(tr),
+		(*C.GLfloat)(&v[0]))
+}
+
+func (location UniformLocation) UniformMatrix4fv(c uint, tr int, v *float32) {
+	C.glUniformMatrix4fv(C.GLint(location), C.GLsizei(c), C.GLboolean(tr),
+		(*C.GLfloat)(v))
 }
 
 /*
@@ -1110,6 +1120,7 @@ func ColorPointer(size int, stride int, pointer interface{}) {
 	t, p := GetGLenumType(pointer)
 	C.glColorPointer(C.GLint(size), C.GLenum(t), C.GLsizei(stride), p)
 }
+
 // Version with explicit type
 func ColorPointerTyped(size int, ptype, stride int, pointer interface{}) {
 	_, p := GetGLenumType(pointer)
@@ -1121,7 +1132,6 @@ func ColorPointerVBO(size int, ptype, stride int, offset int) {
 	C.glColorPointer(C.GLint(size), C.GLenum(ptype), C.GLsizei(stride),
 		unsafe.Pointer(uintptr(offset)))
 }
-
 
 //void glCopyPixels (int x, int y, int width, int height, GLenum type)
 func CopyPixels(x int, y int, width int, height int, type_ GLenum) {
@@ -1178,11 +1188,11 @@ func DrawElements(mode GLenum, count int, indices interface{}) {
 	t, p := GetGLenumType(indices)
 	C.glDrawElements(C.GLenum(mode), C.GLsizei(count), C.GLenum(t), p)
 }
+
 // VBO version
 func DrawElementsVBO(mode GLenum, etype, count int) {
 	C.glDrawElements(C.GLenum(mode), C.GLsizei(count), C.GLenum(etype), unsafe.Pointer(uintptr(0)))
 }
-
 
 //void glDrawPixels (GLsizei width, int height, GLenum format, GLenum type, const GLvoid *pixels)
 func DrawPixels(width int, height int, format, typ GLenum, pixels interface{}) {
@@ -1736,17 +1746,18 @@ func NormalPointer(stride int, pointer interface{}) {
 	t, p := GetGLenumType(pointer)
 	C.glNormalPointer(C.GLenum(t), C.GLsizei(stride), p)
 }
+
 // Version with explicit type
 func NormalPointerTyped(ptype, stride int, pointer interface{}) {
 	_, p := GetGLenumType(pointer)
 	C.glNormalPointer(C.GLenum(ptype), C.GLsizei(stride), p)
 }
+
 // Version for VBO
 func NormalPointerVBO(ptype, stride int, offset int) {
 	C.glNormalPointer(C.GLenum(ptype), C.GLsizei(stride),
 		unsafe.Pointer(uintptr(offset)))
 }
-
 
 //void glOrtho (float64 left, float64 right, float64 bottom, float64 top, float64 zNear, float64 zFar)
 func Ortho(left float64, right float64, bottom float64, top float64, zNear float64, zFar float64) {
@@ -2234,17 +2245,18 @@ func TexCoordPointer(size int, stride int, pointer interface{}) {
 	t, p := GetGLenumType(pointer)
 	C.glTexCoordPointer(C.GLint(size), C.GLenum(t), C.GLsizei(stride), p)
 }
+
 // Version with explicit type
 func TexCoordPointerTyped(size int, ptype, stride int, pointer interface{}) {
 	_, p := GetGLenumType(pointer)
 	C.glTexCoordPointer(C.GLint(size), C.GLenum(ptype), C.GLsizei(stride), p)
 }
+
 // Version for VBO
 func TexCoordPointerVBO(size int, ptype, stride int, offset int) {
 	C.glTexCoordPointer(C.GLint(size), C.GLenum(ptype), C.GLsizei(stride),
 		unsafe.Pointer(uintptr(offset)))
 }
-
 
 //void glTranslated (float64 x, float64 y, float64 z)
 func Translated(x float64, y float64, z float64) {
@@ -2381,17 +2393,18 @@ func VertexPointer(size int, stride int, pointer interface{}) {
 	t, p := GetGLenumType(pointer)
 	C.glVertexPointer(C.GLint(size), C.GLenum(t), C.GLsizei(stride), p)
 }
+
 // Version with explicit type
 func VertexPointerTyped(size int, ptype, stride int, pointer interface{}) {
 	_, p := GetGLenumType(pointer)
 	C.glVertexPointer(C.GLint(size), C.GLenum(ptype), C.GLsizei(stride), p)
 }
+
 // Version for VBO
 func VertexPointerVBO(size int, ptype, stride int, offset int) {
-	C.glVertexPointer(C.GLint(size), C.GLenum(ptype), C.GLsizei(stride), 
+	C.glVertexPointer(C.GLint(size), C.GLenum(ptype), C.GLsizei(stride),
 		unsafe.Pointer(uintptr(offset)))
 }
-
 
 //void glViewport (int x, int y, int width, int height)
 func Viewport(x int, y int, width int, height int) {
@@ -2523,5 +2536,10 @@ func GenFramebuffers(bufs []Framebuffer) {
 //}
 
 func Init() GLenum {
-	return GLenum(C.glewInit())
+	C.glewExperimental = TRUE
+	res := GLenum(C.glewInit())
+	if C.glewIsSupported(C.CString("GLEW_VERSION_3_2")) > 0 {
+		fmt.Println("3.2 supported")
+	}
+	return res
 }
